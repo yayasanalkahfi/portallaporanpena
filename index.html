@@ -2,790 +2,1000 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Portal Laporan Hasil Pena</title>
-    <!-- React & ReactDOM (Stable 18) -->
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-    <!-- Babel untuk kompilasi JSX di Browser -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- Tailwind CSS untuk Styling Modern -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- PropTypes dependensi Recharts -->
-    <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
-    <!-- Recharts untuk Grafik Interaktif (Versi UMD Terpilih) -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.7/Recharts.min.js"></script>
-    <!-- Lucide Icons untuk Ikon Indah -->
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- html2pdf -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#4f46e5', // Indigo 600
+                        secondary: '#0ea5e9', // Sky 500
+                        success: '#10b981', // Emerald 500
+                        warning: '#f59e0b', // Amber 500
+                        dark: '#0f172a', // Slate 900
+                        lightbg: '#f8fafc', // Slate 50
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        /* Hide scrollbar for top nav on mobile */
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        .heatmap-cell { transition: all 0.3s ease; }
+        .heatmap-cell:hover { transform: translateY(-3px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+        
+        /* Hide elements on print */
         @media print {
-            body { background: white !important; }
-            nav, .no-print, .bg-slate-900 { display: none !important; }
-            .print-only { display: block !important; }
-            .page-break-inside-avoid { break-inside: avoid; }
-            @page { size: A4 portrait; margin: 1cm; }
+            body * { visibility: hidden; }
+            #print-area, #print-area * { visibility: visible; }
+            #print-area { position: absolute; left: 0; top: 0; width: 100%; background: white;}
+            .no-print, nav { display: none !important; }
+            main { margin: 0 !important; padding: 0 !important; width: 100% !important; overflow: visible !important;}
+            .print-card-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+            .print-card { border: 1px solid #e2e8f0; padding: 12px; border-radius: 8px; page-break-inside: avoid; }
+            .print-img { width: 100%; aspect-ratio: 9/16; object-fit: cover; border-radius: 6px; }
+            .page-break { page-break-before: always; }
         }
-        @media screen {
-            .print-only { display: none; }
-        }
-        .custom-scrollbar::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-            background: #f1f5f9;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
-            border-radius: 10px;
-        }
+        
+        .modal-content { max-height: 90vh; overflow-y: auto; }
+        
+        /* Top Navbar active states */
+        .nav-item.active { color: #4f46e5; border-bottom-color: #4f46e5; }
+        .nav-item { transition: all 0.2s ease-in-out; }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-800">
-    <div id="root"></div>
+<body class="text-slate-800 flex flex-col h-screen overflow-hidden bg-lightbg">
 
-    <script type="text/babel">
-        const { useState, useMemo, useEffect, useRef } = React;
-
-        // URL WEB APP GOOGLE APPS SCRIPT ANDA
-        const GAS_URL = "https://script.google.com/macros/s/AKfycbzhV5Y00du0rfREsmcqnt47T1z-aFHr04Sxmy5gxtvcJa93AGhw5tQIzeWkdZ_gcPeH/exec";
-
-        function App() {
-            const [activeTab, setActiveTab] = useState('dashboard');
-            const [data, setData] = useState([]);
-            const [isLoading, setIsLoading] = useState(false);
-            const [filterMonth, setFilterMonth] = useState('all');
-            const [filterYear, setFilterYear] = useState('all');
-            const [isDetailOpen, setIsDetailOpen] = useState(false);
-            const [selectedRecord, setSelectedRecord] = useState(null);
-            const [isAddOpen, setIsAddOpen] = useState(false);
-            const [printMode, setPrintMode] = useState('none');
-            const [rechartsReady, setRechartsReady] = useState(false);
-
-            // Verifikasi pemuatan library Recharts secara aman
-            useEffect(() => {
-                let attempts = 0;
-                if (window.Recharts) {
-                    setRechartsReady(true);
-                } else {
-                    const interval = setInterval(() => {
-                        attempts++;
-                        if (window.Recharts) {
-                            setRechartsReady(true);
-                            clearInterval(interval);
-                        } else if (attempts > 100) { // Timeout setelah 10 detik
-                            clearInterval(interval);
-                            console.error("Gagal memuat pustaka grafik Recharts.");
-                        }
-                    }, 100);
-                    return () => clearInterval(interval);
-                }
-            }, []);
-
-            // Load Lucide Icons sesudah render
-            useEffect(() => {
-                if (window.lucide) {
-                    window.lucide.createIcons();
-                }
-            }, [activeTab, isLoading, isAddOpen, isDetailOpen, rechartsReady]);
-
-            const fetchData = async () => {
-                setIsLoading(true);
-                try {
-                    const response = await fetch(GAS_URL);
-                    const result = await response.json();
-                    if (result.status === 'success') {
-                        const sortedData = (result.data || []).sort((a, b) => {
-                            const dateA = a.tanggal ? new Date(a.tanggal) : new Date(0);
-                            const dateB = b.tanggal ? new Date(b.tanggal) : new Date(0);
-                            return dateB - dateA;
-                        });
-                        setData(sortedData);
-                    }
-                } catch (error) {
-                    console.error("Gagal mengambil data dari Google Sheets:", error);
-                } finally {
-                    setIsLoading(false);
-                }
-            };
-
-            useEffect(() => {
-                fetchData();
-            }, []);
-
-            // Logika filter interaktif yang aman terhadap format string / objek tanggal
-            const filteredData = useMemo(() => {
-                return data.filter(item => {
-                    if (!item.tanggal) return false;
-                    
-                    const dateStr = item.tanggal.substring(0, 10).replace(/-/g, '/');
-                    const dateObj = new Date(dateStr);
-                    if (isNaN(dateObj.getTime())) return true; 
-
-                    const matchYear = filterYear === 'all' || dateObj.getFullYear().toString() === filterYear;
-                    const matchMonth = filterMonth === 'all' || (dateObj.getMonth() + 1).toString() === filterMonth;
-                    return matchYear && matchMonth;
-                });
-            }, [data, filterMonth, filterYear]);
-
-            const formatIDR = (num) => {
-                const value = parseFloat(num) || 0;
-                return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(value);
-            };
-
-            const handlePrint = (mode) => {
-                setPrintMode(mode);
-                setTimeout(() => {
-                    window.print();
-                    setPrintMode('none');
-                }, 500);
-            };
-
-            // Menghitung data analitik untuk dashboard berdasarkan hasil filter aktif
-            const analytics = useMemo(() => {
-                let totalMakro = 0;
-                let totalTransfer = 0;
-                let totalTunai = 0;
-
-                filteredData.forEach(item => {
-                    const nominal = parseFloat(item.nominal) || 0;
-                    totalMakro += nominal;
-                    if (item.pembayaran && item.pembayaran.toLowerCase() === 'transfer') {
-                        totalTransfer += nominal;
-                    } else if (item.pembayaran && item.pembayaran.toLowerCase() === 'tunai') {
-                        totalTunai += nominal;
-                    }
-                });
-
-                return { totalMakro, totalTransfer, totalTunai };
-            }, [filteredData]);
-
-            if (!rechartsReady) {
-                return (
-                    <div className="flex h-screen flex-col items-center justify-center bg-slate-50 text-slate-600 font-sans">
-                        <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center gap-3">
-                            <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                            <span className="font-medium">Menginisialisasi pustaka visualisasi grafik...</span>
-                        </div>
+    <!-- ==================== TOP NAVBAR ==================== -->
+    <nav class="bg-white border-b border-slate-200 flex-shrink-0 z-20 shadow-sm no-print">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <!-- Top Row: Logo & Profile -->
+            <div class="flex justify-between items-center h-16">
+                <!-- Logo -->
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded bg-primary flex items-center justify-center text-white shrink-0">
+                        <i class="fa-solid fa-feather-pointed"></i>
                     </div>
-                );
-            }
-
-            return (
-                <div className="min-h-screen">
-                    {/* NAVIGASI (Sembunyi saat cetak) */}
-                    {printMode === 'none' && (
-                        <nav className="bg-slate-900 text-white p-4 shadow-md sticky top-0 z-40">
-                            <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
-                                <div className="flex items-center gap-3">
-                                    <div className="bg-blue-600 p-2 rounded-lg text-white">
-                                        <i data-lucide="wallet" className="w-6 h-6"></i>
-                                    </div>
-                                    <h1 className="text-xl font-bold tracking-wide">Portal Laporan Hasil Pena</h1>
-                                </div>
-                                <div className="flex items-center gap-4">
-                                    {isLoading && (
-                                        <span className="text-sm text-slate-400 flex items-center gap-2">
-                                            <i data-lucide="loader-2" className="w-4 h-4 animate-spin"></i> Memproses data...
-                                        </span>
-                                    )}
-                                    <div className="flex bg-slate-800 rounded-lg p-1">
-                                        <button 
-                                            onClick={() => setActiveTab('dashboard')}
-                                            className={`flex items-center gap-2 px-4 py-2 rounded-md transition-all ${activeTab === 'dashboard' ? 'bg-blue-600 text-white shadow' : 'text-slate-300 hover:text-white'}`}
-                                        >
-                                            <i data-lucide="home" className="w-4.5 h-4.5"></i> Dashboard
-                                        </button>
-                                        <button 
-                                            onClick={() => setActiveTab('rekap')}
-                                            className={`flex items-center gap-2 px-4 py-2 rounded-md transition-all ${activeTab === 'rekap' ? 'bg-blue-600 text-white shadow' : 'text-slate-300 hover:text-white'}`}
-                                        >
-                                            <i data-lucide="table-2" className="w-4.5 h-4.5"></i> Master Rekap
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </nav>
-                    )}
-
-                    {/* MAIN VIEW */}
-                    <main className={`max-w-7xl mx-auto p-4 md:p-6 ${printMode !== 'none' ? 'hidden' : 'block'}`}>
-                        {/* GLOBAL FILTERS */}
-                        <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-6 flex flex-wrap gap-4 items-end justify-between">
-                            <div className="flex gap-4 flex-wrap">
-                                <div>
-                                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Tahun</label>
-                                    <select value={filterYear} onChange={e => setFilterYear(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 bg-slate-50 text-slate-700 outline-none focus:ring-2 focus:ring-blue-500">
-                                        <option value="all">Sepanjang Tahun</option>
-                                        <option value="2026">2026</option>
-                                        <option value="2025">2025</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Bulan</label>
-                                    <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 bg-slate-50 text-slate-700 outline-none focus:ring-2 focus:ring-blue-500">
-                                        <option value="all">Semua Bulan</option>
-                                        <option value="1">Januari</option>
-                                        <option value="2">Februari</option>
-                                        <option value="3">Maret</option>
-                                        <option value="4">April</option>
-                                        <option value="5">Mei</option>
-                                        <option value="6">Juni</option>
-                                        <option value="7">Juli</option>
-                                        <option value="8">Agustus</option>
-                                        <option value="9">September</option>
-                                        <option value="10">Oktober</option>
-                                        <option value="11">November</option>
-                                        <option value="12">Desember</option>
-                                    </select>
-                                </div>
-                                <div className="flex items-end">
-                                    <button onClick={fetchData} className="text-sm text-blue-600 hover:text-blue-800 underline pb-2 font-medium">SINKRONKAN DATA</button>
-                                </div>
-                            </div>
-                            
-                            {/* TOMBOL AKSI */}
-                            <div className="flex gap-2 flex-wrap">
-                                {activeTab === 'dashboard' ? (
-                                    <>
-                                        <button onClick={() => handlePrint('dashboard')} className="flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
-                                            <i data-lucide="printer" className="w-4 h-4"></i> Cetak Dashboard
-                                        </button>
-                                    </>
-                                ) : (
-                                    <div className="flex flex-wrap gap-2 justify-end">
-                                        <button onClick={() => {
-                                            const headers = ['Tanggal', 'Nama', 'Alamat', 'Produk', 'Pembayaran', 'Nominal', 'Kode Transaksi', 'Fee(%)', 'Nominal Fee'];
-                                            const csvContent = filteredData.map(r => [
-                                                r.tanggal,
-                                                `"${r.nama || ''}"`,
-                                                `"${r.alamat || ''}"`,
-                                                `"${r.produk || ''}"`,
-                                                r.pembayaran || '',
-                                                r.nominal || 0,
-                                                r.kodetransaksi || '',
-                                                r.persentasefee || 0,
-                                                r.nominalfee || 0
-                                            ].join(','));
-                                            const blob = new Blob([headers.join(',') + '\n' + csvContent.join('\n')], { type: 'text/csv;charset=utf-8;' });
-                                            const url = URL.createObjectURL(blob);
-                                            const link = document.createElement("a");
-                                            link.setAttribute("href", url);
-                                            link.setAttribute("download", `Rekap_Pena_${filterYear}_${filterMonth}.csv`);
-                                            document.body.appendChild(link);
-                                            link.click();
-                                            document.body.removeChild(link);
-                                        }} className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm font-medium">
-                                            <i data-lucide="file-spreadsheet" className="w-4 h-4"></i> Export CSV
-                                        </button>
-                                        <button onClick={() => handlePrint('tabel')} className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-3 py-2 rounded-lg text-sm font-medium">
-                                            <i data-lucide="printer" className="w-4 h-4"></i> Cetak Tabel
-                                        </button>
-                                        <button onClick={() => handlePrint('buktiPerawatan')} className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-3 py-2 rounded-lg text-sm font-medium">
-                                            <i data-lucide="image" className="w-4 h-4"></i> Cetak Bukti Perawatan
-                                        </button>
-                                        <button onClick={() => handlePrint('buktiTransfer')} className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-3 py-2 rounded-lg text-sm font-medium">
-                                            <i data-lucide="receipt" className="w-4 h-4"></i> Cetak Bukti Transfer
-                                        </button>
-                                        <button onClick={() => setIsAddOpen(true)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-md">
-                                            <i data-lucide="plus" className="w-4 h-4"></i> Tambah Record
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* TAB DASHBOARD */}
-                        {activeTab === 'dashboard' ? (
-                            <DashboardView filteredData={filteredData} analytics={analytics} formatIDR={formatIDR} />
-                        ) : (
-                            /* TAB REKAP */
-                            <MasterRekapView 
-                                data={filteredData} 
-                                formatIDR={formatIDR} 
-                                onRowClick={(record) => { setSelectedRecord(record); setIsDetailOpen(true); }}
-                            />
-                        )}
-                    </main>
-
-                    {/* DETAIL MODAL */}
-                    {isDetailOpen && selectedRecord && (
-                        <DetailModal record={selectedRecord} formatIDR={formatIDR} onClose={() => setIsDetailOpen(false)} />
-                    )}
-
-                    {/* INPUT MODAL DENGAN AUTO-KOMPRESI */}
-                    {isAddOpen && (
-                        <AddRecordModal 
-                            onClose={() => setIsAddOpen(false)} 
-                            onAddSuccess={fetchData} 
-                            products={[...new Set(data.map(item => item.produk).filter(Boolean))]}
-                        />
-                    )}
-
-                    {/* LAYOUT PRINT BULK UNTUK CETAK */}
-                    {printMode === 'dashboard' && (
-                        <div className="print-only p-8">
-                            <h1 className="text-2xl font-bold mb-6 text-center">Laporan Analitik Hasil Pena</h1>
-                            <DashboardView filteredData={filteredData} analytics={analytics} formatIDR={formatIDR} isPrint={true} />
-                        </div>
-                    )}
-
-                    {printMode === 'tabel' && (
-                        <div className="print-only p-4">
-                            <h2 className="text-xl font-bold mb-4 text-center">Rekap Hasil Pena</h2>
-                            <table className="w-full border-collapse border border-slate-300 text-xs">
-                                <thead>
-                                    <tr className="bg-slate-100">
-                                        <th className="border p-2">Tanggal</th>
-                                        <th className="border p-2">Nama & Alamat</th>
-                                        <th className="border p-2">Produk</th>
-                                        <th className="border p-2">Pembayaran</th>
-                                        <th className="border p-2">Nominal</th>
-                                        <th className="border p-2">Kode Trx</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {filteredData.map((row, i) => (
-                                        <tr key={i}>
-                                            <td className="border p-2">{row.tanggal}</td>
-                                            <td className="border p-2 font-semibold">{row.nama}<br/><span className="font-normal text-slate-500 text-[10px]">{row.alamat}</span></td>
-                                            <td className="border p-2">{row.produk}</td>
-                                            <td className="border p-2">{row.pembayaran}</td>
-                                            <td className="border p-2">{formatIDR(row.nominal)}</td>
-                                            <td className="border p-2 font-mono">{row.kodetransaksi}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-
-                    {(printMode === 'buktiPerawatan' || printMode === 'buktiTransfer') && (
-                        <div className="print-only p-4">
-                            <div className="grid grid-cols-2 gap-6">
-                                {filteredData
-                                    .filter(item => printMode === 'buktiPerawatan' ? item.buktiperawatan : item.buktitransfer)
-                                    .map((item, idx) => (
-                                        <div key={idx} className="border-2 border-slate-800 rounded-xl p-4 flex flex-col items-center page-break-inside-avoid shadow-sm">
-                                            <h3 className="font-bold text-sm mb-3 tracking-wide text-center uppercase border-b w-full pb-2 text-slate-800">
-                                                {printMode === 'buktiPerawatan' ? 'BUKTI PERAWATAN' : 'BUKTI TRANSFER'}
-                                            </h3>
-                                            <div className="w-full relative bg-slate-100 rounded-lg overflow-hidden border border-slate-300" style={{ paddingBottom: '177.77%' }}>
-                                                <img 
-                                                    src={printMode === 'buktiPerawatan' ? item.buktiperawatan : item.buktitransfer} 
-                                                    alt="Lampiran Gambar" 
-                                                    className="absolute inset-0 w-full h-full object-cover shrink-0"
-                                                />
-                                            </div>
-                                            <div className="w-full mt-4 text-xs space-y-1.5 text-slate-700">
-                                                <p><strong>Nama:</strong> {item.nama}</p>
-                                                <p><strong>Alamat:</strong> {item.alamat}</p>
-                                                <p className="pt-2 border-t border-dashed border-slate-400 font-mono text-slate-800">
-                                                    <strong>Kode TRX:</strong> {item.kodetransaksi}
-                                                </p>
-                                            </div>
-                                        </div>
-                                    ))
-                                }
-                            </div>
-                        </div>
-                    )}
+                    <span class="text-lg md:text-xl font-bold text-slate-800 tracking-tight">Portal Pena</span>
                 </div>
-            );
-        }
+                <!-- Profile -->
+                <div class="flex items-center gap-3">
+                    <div class="hidden sm:block text-right">
+                        <p class="text-sm font-medium text-slate-700 leading-tight">Admin Utama</p>
+                        <p class="text-xs text-slate-500">Administrator</p>
+                    </div>
+                    <img src="https://ui-avatars.com/api/?name=Admin+Pena&background=eff6ff&color=4f46e5" alt="Admin" class="h-8 w-8 md:h-9 md:w-9 rounded-full shrink-0">
+                </div>
+            </div>
+            
+            <!-- Bottom Row: Navigation Tabs -->
+            <div class="flex space-x-6 sm:space-x-8 overflow-x-auto hide-scrollbar">
+                <button onclick="switchPage('dashboard')" id="nav-dashboard" class="nav-item active border-b-2 border-transparent py-3 px-1 text-sm md:text-base font-semibold text-slate-500 hover:text-slate-700 hover:border-slate-300 flex items-center gap-2 whitespace-nowrap">
+                    <i class="fa-solid fa-chart-pie"></i> Dashboard Analitik
+                </button>
+                <button onclick="switchPage('rekap')" id="nav-rekap" class="nav-item border-b-2 border-transparent py-3 px-1 text-sm md:text-base font-semibold text-slate-500 hover:text-slate-700 hover:border-slate-300 flex items-center gap-2 whitespace-nowrap">
+                    <i class="fa-solid fa-table"></i> Master Rekap
+                </button>
+            </div>
+        </div>
+    </nav>
 
-        // --- DASHBOARD SUB-VIEW ---
-        function DashboardView({ filteredData, analytics, formatIDR, isPrint = false }) {
-            const { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Legend } = window.Recharts;
-            const chartData = useMemo(() => {
-                const months = {};
-                filteredData.forEach(item => {
-                    if (!item.tanggal) return;
-                    const mKey = item.tanggal.substring(0, 7); 
-                    if (!months[mKey]) months[mKey] = { name: mKey, Makro: 0, Transfer: 0, Tunai: 0 };
-                    
-                    const nominal = parseFloat(item.nominal) || 0;
-                    months[mKey].Makro += nominal;
-                    if (item.pembayaran && item.pembayaran.toLowerCase() === 'transfer') months[mKey].Transfer += nominal;
-                    if (item.pembayaran && item.pembayaran.toLowerCase() === 'tunai') months[mKey].Tunai += nominal;
-                });
-                return Object.values(months).sort((a, b) => a.name.localeCompare(b.name));
-            }, [filteredData]);
+    <!-- ==================== MAIN CONTENT ==================== -->
+    <main class="flex-1 overflow-y-auto relative no-print scroll-smooth">
+        <div class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 pb-24">
+            
+            <!-- PAGE HEADER & GLOBAL FILTERS -->
+            <div class="bg-white p-4 sm:px-6 sm:py-5 rounded-2xl shadow-sm border border-slate-100 mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 sticky top-0 z-10">
+                <h2 id="page-title" class="text-xl md:text-2xl font-bold text-slate-800 tracking-tight shrink-0">Dashboard Analitik</h2>
+                
+                <div class="flex items-center gap-3 w-full md:w-auto">
+                    <div class="relative flex-1 md:w-auto">
+                        <i class="fa-regular fa-calendar absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 text-sm"></i>
+                        <select id="global-month" class="w-full pl-9 pr-8 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none cursor-pointer font-medium text-slate-700" onchange="applyGlobalFilter()">
+                            <option value="ALL">Semua Bulan</option>
+                            <option value="01">Januari</option><option value="02">Februari</option>
+                            <option value="03">Maret</option><option value="04">April</option>
+                            <option value="05">Mei</option><option value="06">Juni</option>
+                            <option value="07">Juli</option><option value="08">Agustus</option>
+                            <option value="09">September</option><option value="10">Oktober</option>
+                            <option value="11">November</option><option value="12">Desember</option>
+                        </select>
+                    </div>
+                    <div class="relative flex-1 md:w-auto">
+                        <select id="global-year" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none cursor-pointer font-medium text-slate-700" onchange="applyGlobalFilter()">
+                            <option value="ALL">Semua Tahun</option>
+                            <option value="2024">2024</option>
+                            <option value="2025">2025</option>
+                            <option value="2026">2026</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
 
-            const productData = useMemo(() => {
-                const prods = {};
-                filteredData.forEach(item => {
-                    if (!item.produk) return;
-                    if (!prods[item.produk]) prods[item.produk] = { name: item.produk, Total: 0 };
-                    prods[item.produk].Total += parseFloat(item.nominal) || 0;
-                });
-                return Object.values(prods).sort((a, b) => b.Total - a.Total).slice(0, 5);
-            }, [filteredData]);
+            <!-- ==================== DASHBOARD PAGE ==================== -->
+            <div id="page-dashboard" class="page-section block">
+                
+                <!-- Dashboard Actions -->
+                <div class="flex flex-wrap gap-3 mb-6">
+                    <button onclick="exportDashboardPDF()" class="flex-1 md:flex-none justify-center bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-red-600 px-4 py-2.5 rounded-lg shadow-sm flex items-center gap-2 text-sm font-semibold transition-colors">
+                        <i class="fa-solid fa-file-pdf"></i> Export PDF
+                    </button>
+                    <button onclick="window.print()" class="flex-1 md:flex-none justify-center bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 px-4 py-2.5 rounded-lg shadow-sm flex items-center gap-2 text-sm font-semibold transition-colors">
+                        <i class="fa-solid fa-print"></i> Cetak Dashboard
+                    </button>
+                </div>
 
-            return (
-                <div className="space-y-6">
-                    {/* STATS CARDS */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 border-l-4 border-l-blue-600 flex items-center gap-4">
-                            <div className="bg-blue-100 p-3 rounded-full text-blue-600"><i data-lucide="wallet" className="w-6 h-6"></i></div>
-                            <div>
-                                <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Hasil Makro</p>
-                                <p className="text-xl font-bold text-slate-800">{formatIDR(analytics.totalMakro)}</p>
+                <div id="dashboard-content">
+                    <!-- Stat Cards Row -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-6 mb-6 md:mb-8">
+                        <!-- Card 1 -->
+                        <div class="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-100 relative overflow-hidden">
+                            <div class="flex justify-between items-start gap-2">
+                                <div class="min-w-0">
+                                    <p class="text-xs md:text-sm font-semibold text-slate-500 mb-1 truncate">TOTAL HASIL MAKRO</p>
+                                    <h3 class="text-2xl md:text-3xl font-bold text-slate-800 tracking-tight truncate" id="card-makro">Rp 0</h3>
+                                </div>
+                                <div class="w-10 h-10 md:w-12 md:h-12 rounded-full bg-indigo-50 flex items-center justify-center text-primary shrink-0">
+                                    <i class="fa-solid fa-wallet text-lg md:text-xl"></i>
+                                </div>
+                            </div>
+                            <div class="mt-4 flex items-center text-xs md:text-sm">
+                                <span class="text-success flex items-center font-medium"><i class="fa-solid fa-arrow-up mr-1 text-[10px] md:text-xs"></i> 100%</span>
+                                <span class="text-slate-400 ml-2">Total keseluruhan</span>
                             </div>
                         </div>
-                        <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 border-l-4 border-l-emerald-500 flex items-center gap-4">
-                            <div className="bg-emerald-100 p-3 rounded-full text-emerald-600"><i data-lucide="landmark" className="w-6 h-6"></i></div>
-                            <div>
-                                <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Hasil Transfer</p>
-                                <p className="text-xl font-bold text-slate-800">{formatIDR(analytics.totalTransfer)}</p>
+                        <!-- Card 2 -->
+                        <div class="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-100 relative overflow-hidden">
+                            <div class="flex justify-between items-start gap-2">
+                                <div class="min-w-0">
+                                    <p class="text-xs md:text-sm font-semibold text-slate-500 mb-1 truncate">HASIL TRANSFER</p>
+                                    <h3 class="text-2xl md:text-3xl font-bold text-slate-800 tracking-tight truncate" id="card-transfer">Rp 0</h3>
+                                </div>
+                                <div class="w-10 h-10 md:w-12 md:h-12 rounded-full bg-emerald-50 flex items-center justify-center text-success shrink-0">
+                                    <i class="fa-solid fa-money-bill-transfer text-lg md:text-xl"></i>
+                                </div>
+                            </div>
+                            <div class="mt-4 flex items-center text-xs md:text-sm">
+                                <span class="text-slate-400" id="card-transfer-pct">0% dari total</span>
                             </div>
                         </div>
-                        <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 border-l-4 border-l-amber-500 flex items-center gap-4">
-                            <div className="bg-amber-100 p-3 rounded-full text-amber-600"><i data-lucide="receipt" className="w-6 h-6"></i></div>
-                            <div>
-                                <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Hasil Tunai</p>
-                                <p className="text-xl font-bold text-slate-800">{formatIDR(analytics.totalTunai)}</p>
+                        <!-- Card 3 -->
+                        <div class="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-100 relative overflow-hidden sm:col-span-2 md:col-span-1">
+                            <div class="flex justify-between items-start gap-2">
+                                <div class="min-w-0">
+                                    <p class="text-xs md:text-sm font-semibold text-slate-500 mb-1 truncate">HASIL TUNAI</p>
+                                    <h3 class="text-2xl md:text-3xl font-bold text-slate-800 tracking-tight truncate" id="card-tunai">Rp 0</h3>
+                                </div>
+                                <div class="w-10 h-10 md:w-12 md:h-12 rounded-full bg-amber-50 flex items-center justify-center text-warning shrink-0">
+                                    <i class="fa-solid fa-money-bill-wave text-lg md:text-xl"></i>
+                                </div>
+                            </div>
+                            <div class="mt-4 flex items-center text-xs md:text-sm">
+                                <span class="text-slate-400" id="card-tunai-pct">0% dari total</span>
                             </div>
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        {/* CHART TREND */}
-                        <div className="lg:col-span-2 bg-white p-5 rounded-xl border border-slate-200">
-                            <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
-                                <i data-lucide="trending-up" className="text-blue-600 w-5 h-5"></i> Trendline Hasil Pena
-                            </h3>
-                            <div className="h-72">
-                                {chartData.length > 0 ? (
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <LineChart data={chartData}>
-                                            <CartesianGrid strokeDasharray="3 3" />
-                                            <XAxis dataKey="name" />
-                                            <YAxis tickFormatter={v => `Rp${(v/1000000).toFixed(1)}jt`} />
-                                            <Tooltip formatter={v => formatIDR(v)} />
-                                            <Legend />
-                                            <Line type="monotone" dataKey="Makro" stroke="#2563eb" strokeWidth={3} />
-                                            <Line type="monotone" dataKey="Transfer" stroke="#10b981" />
-                                            <Line type="monotone" dataKey="Tunai" stroke="#f59e0b" />
-                                        </LineChart>
-                                    </ResponsiveContainer>
-                                ) : (
-                                    <div className="h-full flex items-center justify-center text-slate-400">Tidak ada data untuk grafik trend.</div>
-                                )}
+                    <!-- Charts Row 1: Trend & Produk -->
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6 mb-6 md:mb-8">
+                        <!-- Trend Line Chart -->
+                        <div class="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-100 lg:col-span-2">
+                            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-2">
+                                <h4 class="font-bold text-slate-800">Trend Waktu ke Waktu</h4>
+                                <div class="flex flex-wrap gap-3">
+                                    <span class="inline-flex items-center text-xs font-medium text-primary"><span class="w-2.5 h-2.5 rounded-full bg-primary mr-1.5"></span>Makro</span>
+                                    <span class="inline-flex items-center text-xs font-medium text-success"><span class="w-2.5 h-2.5 rounded-full bg-success mr-1.5"></span>Transfer</span>
+                                    <span class="inline-flex items-center text-xs font-medium text-warning"><span class="w-2.5 h-2.5 rounded-full bg-warning mr-1.5"></span>Tunai</span>
+                                </div>
+                            </div>
+                            <div class="relative h-56 md:h-64 w-full">
+                                <canvas id="trendChart"></canvas>
                             </div>
                         </div>
-
-                        {/* CHART TERLARIS */}
-                        <div className="bg-white p-5 rounded-xl border border-slate-200">
-                            <h3 className="font-bold text-slate-800 mb-4">Produk Terlaris</h3>
-                            <div className="h-72">
-                                {productData.length > 0 ? (
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart data={productData} layout="vertical">
-                                            <CartesianGrid strokeDasharray="3 3" />
-                                            <XAxis type="number" hide />
-                                            <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 10 }} />
-                                            <Tooltip formatter={v => formatIDR(v)} />
-                                            <Bar dataKey="Total" fill="#6366f1" radius={[0, 4, 4, 0]} />
-                                        </BarChart>
-                                    </ResponsiveContainer>
-                                ) : (
-                                    <div className="h-full flex items-center justify-center text-slate-400">Tidak ada data produk.</div>
-                                )}
+                        
+                        <!-- Bar Chart Produk (Horizontal) -->
+                        <div class="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-100">
+                            <h4 class="font-bold text-slate-800 mb-6">Produk Terlaris</h4>
+                            <div class="relative h-56 md:h-64 w-full">
+                                <canvas id="produkChart"></canvas>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Heatmap Row -->
+                    <div class="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-100">
+                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-1">
+                            <h4 class="font-bold text-slate-800">Heatmap Hasil Bulanan</h4>
+                            <p class="text-xs text-slate-400">Intensitas warna menunjukkan volume</p>
+                        </div>
+                        <div id="heatmap-container" class="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2 md:gap-3">
+                            <!-- Injected via JS -->
                         </div>
                     </div>
                 </div>
-            );
-        }
+            </div>
 
-        // --- MASTER REKAP TABLE ---
-        function MasterRekapView({ data, formatIDR, onRowClick }) {
-            return (
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                    <div className="overflow-x-auto custom-scrollbar">
-                        <table className="w-full text-left text-sm whitespace-nowrap">
-                            <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
-                                <tr>
-                                    <th className="px-6 py-4">Tanggal & TRX</th>
-                                    <th className="px-6 py-4">Nama & Alamat</th>
-                                    <th className="px-6 py-4">Produk</th>
-                                    <th className="px-6 py-4">Pembayaran & Nominal</th>
-                                    <th className="px-6 py-4">Nominal Fee</th>
+            <!-- ==================== MASTER REKAP PAGE ==================== -->
+            <div id="page-rekap" class="page-section hidden">
+                
+                <!-- Actions Bar -->
+                <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
+                    <div class="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 w-full lg:w-auto">
+                        <button onclick="exportCSV()" class="justify-center bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3 py-2 md:px-4 md:py-2.5 rounded-lg shadow-sm text-xs md:text-sm font-semibold transition-colors flex items-center gap-2"><i class="fa-solid fa-file-csv text-emerald-600"></i> Export CSV</button>
+                        <button onclick="printArea('table')" class="justify-center bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3 py-2 md:px-4 md:py-2.5 rounded-lg shadow-sm text-xs md:text-sm font-semibold transition-colors flex items-center gap-2"><i class="fa-solid fa-print text-slate-500"></i> Cetak Tabel</button>
+                        
+                        <div class="h-10 w-px bg-slate-200 mx-1 hidden sm:block"></div>
+                        
+                        <button onclick="printArea('perawatan')" class="justify-center bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3 py-2 md:px-4 md:py-2.5 rounded-lg shadow-sm text-xs md:text-sm font-semibold transition-colors flex items-center gap-2"><i class="fa-regular fa-image text-secondary"></i> Bukti Perawatan</button>
+                        <button onclick="printArea('transfer')" class="justify-center bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3 py-2 md:px-4 md:py-2.5 rounded-lg shadow-sm text-xs md:text-sm font-semibold transition-colors flex items-center gap-2"><i class="fa-solid fa-money-check-dollar text-primary"></i> Bukti Transfer</button>
+                    </div>
+                    
+                    <button onclick="openFormModal()" class="bg-primary hover:bg-indigo-700 text-white px-5 py-3 rounded-lg shadow-md shadow-primary/30 font-semibold text-sm transition-all flex items-center justify-center gap-2 w-full lg:w-auto">
+                        <i class="fa-solid fa-plus"></i> Tambah Record Baru
+                    </button>
+                </div>
+
+                <!-- Modern Table -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-slate-100">
+                            <thead>
+                                <tr class="bg-slate-50/50">
+                                    <th scope="col" class="px-4 md:px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Tanggal & TRX</th>
+                                    <th scope="col" class="px-4 md:px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Pelanggan</th>
+                                    <th scope="col" class="px-4 md:px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Produk</th>
+                                    <th scope="col" class="px-4 md:px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Nominal & Pembayaran</th>
+                                    <th scope="col" class="px-4 md:px-6 py-4 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Fee Rekap</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {data.length === 0 ? (
-                                    <tr>
-                                        <td colSpan="5" className="text-center py-16 text-slate-400">
-                                            <div className="flex flex-col items-center gap-2">
-                                                <i data-lucide="folder-open" className="w-10 h-10 text-slate-300"></i>
-                                                <span>Belum ada data pada periode ini.</span>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    data.map((row, idx) => (
-                                        <tr key={idx} onClick={() => onRowClick(row)} className="hover:bg-blue-50/50 cursor-pointer transition-colors">
-                                            <td className="px-6 py-4">
-                                                <p className="font-medium text-slate-800">{row.tanggal}</p>
-                                                <p className="font-mono text-xs text-slate-400 mt-0.5">{row.kodetransaksi}</p>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <p className="font-semibold text-slate-800">{row.nama}</p>
-                                                <p className="text-xs text-slate-500 truncate max-w-xs">{row.alamat}</p>
-                                            </td>
-                                            <td className="px-6 py-4 font-medium text-slate-700">{row.produk}</td>
-                                            <td className="px-6 py-4">
-                                                <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider mb-1 ${row.pembayaran === 'Transfer' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
-                                                    {row.pembayaran}
-                                                </span>
-                                                <p className="font-bold text-slate-900">{formatIDR(row.nominal)}</p>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <p className="font-semibold text-slate-800">{formatIDR(row.nominalfee)}</p>
-                                                <p className="text-xs text-slate-400 mt-0.5">Fee: {row.persentasefee}%</p>
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
+                            <tbody id="table-body" class="bg-white divide-y divide-slate-100">
+                                <!-- Injected via JS -->
                             </tbody>
                         </table>
                     </div>
-                </div>
-            );
-        }
-
-        // --- DETAIL DATA MODAL ---
-        function DetailModal({ record, formatIDR, onClose }) {
-            return (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-                    <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl animate-in fade-in duration-200">
-                        <div className="px-6 py-4 border-b flex justify-between items-center bg-slate-50 rounded-t-2xl">
-                            <h2 className="text-lg font-bold">Detail Record: {record.kodetransaksi}</h2>
-                            <button onClick={onClose} className="p-1 hover:bg-slate-200 rounded-full transition-colors"><i data-lucide="x"></i></button>
+                    <!-- Empty state (hidden by default) -->
+                    <div id="table-empty" class="hidden py-12 text-center px-4">
+                        <div class="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3 text-slate-400">
+                            <i class="fa-solid fa-folder-open text-2xl"></i>
                         </div>
-                        <div className="p-6 overflow-y-auto flex-1 custom-scrollbar">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="space-y-3 text-sm">
-                                    <div><span className="text-slate-400 font-medium">Tanggal</span><p className="text-slate-800 font-semibold">{record.tanggal}</p></div>
-                                    <div><span className="text-slate-400 font-medium">Nama Pelanggan</span><p className="text-slate-800 font-semibold">{record.nama}</p></div>
-                                    <div><span className="text-slate-400 font-medium">Alamat</span><p className="text-slate-800 font-semibold">{record.alamat}</p></div>
-                                    <div><span className="text-slate-400 font-medium">Produk</span><p className="text-slate-800 font-semibold">{record.produk}</p></div>
-                                    <div><span className="text-slate-400 font-medium">Nominal Transaksi</span><p className="text-blue-600 font-bold text-base">{formatIDR(record.nominal)} ({record.pembayaran})</p></div>
-                                    <div className="grid grid-cols-2 gap-2 border-t pt-2">
-                                        <div><span className="text-slate-400 font-medium">Fee %</span><p className="text-slate-800 font-semibold">{record.persentasefee}%</p></div>
-                                        <div><span className="text-slate-400 font-medium">Nominal Fee</span><p className="text-slate-800 font-semibold">{formatIDR(record.nominalfee)}</p></div>
-                                    </div>
+                        <p class="text-slate-500 font-medium">Tidak ada data ditemukan pada periode ini.</p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- ==================== PRINT AREA (Hidden by default) ==================== -->
+    <div id="print-area" class="hidden bg-white p-8">
+        <div class="flex items-center justify-between mb-8 border-b pb-4">
+            <div>
+                <h2 id="print-title" class="text-2xl font-bold text-slate-800">Laporan Hasil Pena</h2>
+                <p id="print-subtitle" class="text-slate-500 text-sm mt-1">Periode: Semua</p>
+            </div>
+            <div class="text-right text-sm text-slate-500">
+                Dicetak pada: <span id="print-date"></span>
+            </div>
+        </div>
+        <div id="print-content"></div>
+    </div>
+
+    <!-- ==================== MODALS ==================== -->
+    
+    <!-- Modal Detail Record -->
+    <div id="modal-detail" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm hidden flex justify-center items-end sm:items-center z-50 no-print transition-opacity">
+        <div class="bg-white w-full sm:w-11/12 md:w-3/4 lg:w-3/5 rounded-t-2xl sm:rounded-2xl shadow-2xl modal-content relative transform transition-transform border-t sm:border border-slate-100">
+            <!-- Header -->
+            <div class="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-2xl sticky top-0 z-10">
+                <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-receipt text-slate-400"></i> Detail Transaksi</h3>
+                <button onclick="closeModal('modal-detail')" class="text-slate-400 hover:text-slate-700 hover:bg-slate-200 p-1.5 rounded-lg transition-colors"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            
+            <!-- Body -->
+            <div class="p-5">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 text-sm" id="detail-content">
+                    <!-- Injected via JS -->
+                </div>
+            </div>
+            
+            <!-- Footer -->
+            <div class="px-5 py-4 bg-slate-50 border-t border-slate-100 sm:rounded-b-2xl flex flex-col sm:flex-row justify-end gap-3">
+                <button onclick="closeModal('modal-detail')" class="order-2 sm:order-1 px-5 py-2.5 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-700 font-medium transition-colors w-full sm:w-auto text-center">Tutup</button>
+                <button id="btn-edit-record" class="order-1 sm:order-2 px-5 py-2.5 bg-warning hover:bg-amber-600 text-white font-medium rounded-lg shadow-sm transition-colors flex justify-center items-center gap-2 w-full sm:w-auto"><i class="fa-solid fa-pen-to-square"></i> Edit Data</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Form (Tambah/Edit) -->
+    <div id="modal-form" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm hidden flex justify-center items-end sm:items-center z-40 no-print">
+        <div class="bg-white w-full sm:w-11/12 md:w-3/4 lg:w-3/5 xl:w-1/2 rounded-t-2xl sm:rounded-2xl shadow-2xl modal-content relative border-t sm:border border-slate-100 flex flex-col max-h-[90vh]">
+            <!-- Header -->
+            <div class="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-2xl sticky top-0 z-10">
+                <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2" id="form-title"><i class="fa-solid fa-file-circle-plus text-primary"></i> Tambah Record Baru</h3>
+                <button onclick="closeModal('modal-form')" class="text-slate-400 hover:text-slate-700 hover:bg-slate-200 p-1.5 rounded-lg transition-colors"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            
+            <!-- Body Form (Scrollable) -->
+            <div class="overflow-y-auto p-5 flex-1">
+                <form id="record-form" onsubmit="handleFormSubmit(event)">
+                    <input type="hidden" id="form-id">
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        
+                        <!-- Section: Info Transaksi -->
+                        <div class="md:col-span-2 border-b pb-4 mb-1">
+                            <h4 class="text-xs font-bold text-slate-800 mb-3 uppercase tracking-wider">Informasi Transaksi</h4>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Tanggal <span class="text-red-500">*</span></label>
+                                    <input type="date" id="f-tanggal" required class="w-full bg-slate-50 border border-slate-200 px-3 py-2.5 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white transition-colors text-sm appearance-none">
                                 </div>
-                                <div className="space-y-4">
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">Bukti Perawatan</span>
-                                            {record.buktiperawatan ? (
-                                                <a href={record.buktiperawatan} target="_blank" rel="noreferrer" className="block relative aspect-[9/16] rounded-xl overflow-hidden border">
-                                                    <img src={record.buktiperawatan} alt="Bukti Perawatan" className="absolute inset-0 w-full h-full object-cover" />
-                                                </a>
-                                            ) : <div className="border border-dashed h-48 rounded-xl flex items-center justify-center text-xs text-slate-400">Tidak ada foto</div>}
-                                        </div>
-                                        <div>
-                                            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">Bukti Transfer</span>
-                                            {record.buktitransfer ? (
-                                                <a href={record.buktitransfer} target="_blank" rel="noreferrer" className="block relative aspect-[9/16] rounded-xl overflow-hidden border">
-                                                    <img src={record.buktitransfer} alt="Bukti Transfer" className="absolute inset-0 w-full h-full object-cover" />
-                                                </a>
-                                            ) : <div className="border border-dashed h-48 rounded-xl flex items-center justify-center text-xs text-slate-400">Tidak ada foto</div>}
-                                        </div>
-                                    </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Kode Transaksi <span class="text-red-500">*</span></label>
+                                    <input type="text" id="f-kode" required class="w-full bg-slate-50 border border-slate-200 px-3 py-2.5 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white transition-colors text-sm" placeholder="Contoh: TRX-001">
                                 </div>
                             </div>
                         </div>
-                        <div className="px-6 py-4 border-t bg-slate-50 rounded-b-2xl flex justify-end gap-2">
-                            <button onClick={() => alert("Gunakan panel spreadsheet utama untuk mengubah data ini.")} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-bold">Edit</button>
-                            <button onClick={onClose} className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-bold">Tutup</button>
+
+                        <!-- Section: Pelanggan -->
+                        <div class="md:col-span-2 border-b pb-4 mb-1">
+                            <h4 class="text-xs font-bold text-slate-800 mb-3 uppercase tracking-wider">Informasi Pelanggan</h4>
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Nama Lengkap <span class="text-red-500">*</span></label>
+                                    <input type="text" id="f-nama" required class="w-full bg-slate-50 border border-slate-200 px-3 py-2.5 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white transition-colors text-sm" placeholder="Masukkan nama">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Alamat Lengkap <span class="text-red-500">*</span></label>
+                                    <textarea id="f-alamat" required class="w-full bg-slate-50 border border-slate-200 px-3 py-2.5 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white transition-colors text-sm resize-none" rows="2" placeholder="Masukkan alamat lengkap"></textarea>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Section: Produk & Pembayaran -->
+                        <div class="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4 border-b pb-4 mb-1">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1.5">Kategori Produk <span class="text-red-500">*</span></label>
+                                <div class="flex gap-2">
+                                    <select id="f-produk" required class="w-full bg-slate-50 border border-slate-200 px-3 py-2.5 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white transition-colors text-sm">
+                                        <option value="Buku Pena">Buku Pena</option>
+                                        <option value="Majalah">Majalah</option>
+                                        <option value="Merchandise">Merchandise</option>
+                                    </select>
+                                    <button type="button" onclick="openAddProdukModal()" class="bg-indigo-50 border border-indigo-100 text-primary px-3 rounded-lg hover:bg-indigo-100 transition-colors shrink-0" title="Tambah Produk Baru"><i class="fa-solid fa-plus"></i></button>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1.5">Metode Pembayaran <span class="text-red-500">*</span></label>
+                                <div class="flex gap-2 mt-1">
+                                    <label class="flex-1 cursor-pointer">
+                                        <input type="radio" name="f-pembayaran" value="Transfer" class="peer sr-only" required>
+                                        <div class="w-full text-center py-2.5 border border-slate-200 rounded-lg peer-checked:bg-emerald-50 peer-checked:border-emerald-500 peer-checked:text-emerald-700 hover:bg-slate-50 transition-all text-sm font-medium">
+                                            <i class="fa-solid fa-money-bill-transfer mr-1"></i> Transfer
+                                        </div>
+                                    </label>
+                                    <label class="flex-1 cursor-pointer">
+                                        <input type="radio" name="f-pembayaran" value="Tunai" class="peer sr-only" required>
+                                        <div class="w-full text-center py-2.5 border border-slate-200 rounded-lg peer-checked:bg-amber-50 peer-checked:border-amber-500 peer-checked:text-amber-700 hover:bg-slate-50 transition-all text-sm font-medium">
+                                            <i class="fa-solid fa-money-bill-wave mr-1"></i> Tunai
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="md:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1.5">Nominal Transaksi (Rp) <span class="text-red-500">*</span></label>
+                                <input type="number" id="f-nominal" required class="w-full bg-white border border-slate-200 px-3 py-2.5 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors text-sm" oninput="calculateFee()" placeholder="0">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1.5">Fee Rekap (%) <span class="text-red-500">*</span></label>
+                                <input type="number" id="f-persen-fee" required class="w-full bg-white border border-slate-200 px-3 py-2.5 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors text-sm" oninput="calculateFee()" placeholder="0">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1.5">Nominal Fee (Rp)</label>
+                                <input type="number" id="f-nominal-fee" readonly class="w-full bg-slate-200 border border-slate-200 px-3 py-2.5 rounded-lg text-slate-600 font-bold text-sm" placeholder="0">
+                            </div>
+                        </div>
+
+                        <!-- Section: Upload -->
+                        <div class="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1.5">Bukti Transfer</label>
+                                <input type="file" id="f-bukti-transfer" accept="image/*" class="w-full text-xs sm:text-sm text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-primary hover:file:bg-indigo-100 transition-all border border-dashed border-slate-300 rounded-lg p-2 bg-slate-50">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1.5">Bukti Perawatan</label>
+                                <input type="file" id="f-bukti-perawatan" accept="image/*" class="w-full text-xs sm:text-sm text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-primary hover:file:bg-indigo-100 transition-all border border-dashed border-slate-300 rounded-lg p-2 bg-slate-50">
+                            </div>
                         </div>
                     </div>
-                </div>
-            );
+
+                    <!-- Footer / Submit Area -->
+                    <div class="mt-8 flex flex-col sm:flex-row justify-end gap-3 pt-5 border-t border-slate-100">
+                        <button type="button" onclick="closeModal('modal-form')" class="order-2 sm:order-1 px-5 py-2.5 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-700 font-medium transition-colors w-full sm:w-auto text-center">Batal</button>
+                        <button type="submit" id="btn-save" class="order-1 sm:order-2 px-6 py-2.5 bg-primary hover:bg-indigo-700 text-white rounded-lg shadow-md shadow-primary/30 font-medium transition-all flex items-center justify-center gap-2 w-full sm:w-auto">
+                            <i class="fa-solid fa-cloud-arrow-up"></i> Simpan Data
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Tambah Produk Baru (Sub-modal) -->
+    <div id="modal-tambah-produk" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex justify-center items-center z-[60] no-print transition-opacity">
+        <div class="bg-white w-11/12 max-w-sm rounded-2xl shadow-2xl p-6 relative">
+            <h3 class="text-lg font-bold text-slate-800 mb-2">Tambah Kategori Produk</h3>
+            <p class="text-xs text-slate-500 mb-4">Produk ini akan ditambahkan ke daftar pilihan dropdown Anda.</p>
+            
+            <input type="text" id="input-new-produk" class="w-full bg-slate-50 border border-slate-200 px-4 py-3 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors text-sm mb-5" placeholder="Contoh: Souvenir Kaca">
+            
+            <div class="flex justify-end gap-3">
+                <button type="button" onclick="closeModal('modal-tambah-produk')" class="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium transition-colors">Batal</button>
+                <button type="button" onclick="saveNewProduk()" class="px-5 py-2 bg-primary hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors shadow-md shadow-primary/20">Tambahkan</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JS Logic -->
+    <script>
+        // Set Default Defaults for Chart.js
+        Chart.defaults.font.family = "'Inter', sans-serif";
+        Chart.defaults.color = '#64748b';
+        Chart.defaults.scale.grid.color = '#f1f5f9';
+
+        // API CONFIGURATION (TARO URL GOOGLE SCRIPT DISINI)
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbzhV5Y00du0rfREsmcqnt47T1z-aFHr04Sxmy5gxtvcJa93AGhw5tQIzeWkdZ_gcPeH/exec"; 
+
+        // MOCK DATA AWAL (Nanti akan bertambah seiring input)
+        let dbData = [
+            { id: "1", tanggal: "2024-05-10", nama: "Budi Santoso", alamat: "Jl. Merdeka No 1, Jakarta Selatan, 12110", produk: "Buku Pena", pembayaran: "Transfer", nominal: 2150000, kode_transaksi: "TRX-001", persentase_fee: 10, nominal_fee: 215000, bukti_transfer: "https://images.unsplash.com/photo-1563013544-824ae1b704d3?w=300", bukti_perawatan: "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=300" },
+            { id: "2", tanggal: "2024-05-15", nama: "Siti Aminah", alamat: "Jl. Sudirman Komplek A, Bandung", produk: "Majalah", pembayaran: "Tunai", nominal: 600000, kode_transaksi: "TRX-002", persentase_fee: 5, nominal_fee: 30000, bukti_transfer: "", bukti_perawatan: "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=300" },
+            { id: "3", tanggal: "2024-06-02", nama: "Andi Darmawan", alamat: "Jl. Pahlawan Blok C, Surabaya", produk: "Buku Pena", pembayaran: "Transfer", nominal: 1550000, kode_transaksi: "TRX-003", persentase_fee: 10, nominal_fee: 155000, bukti_transfer: "https://images.unsplash.com/photo-1563013544-824ae1b704d3?w=300", bukti_perawatan: "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=300" }
+        ];
+
+        let produkList = ["Buku Pena", "Majalah", "Merchandise"];
+        
+        let chartTrend = null;
+        let chartProduk = null;
+
+        const formatRp = (num) => 'Rp ' + Number(num).toLocaleString('id-ID');
+        
+        const formatDate = (dateStr) => {
+            const options = { day: 'numeric', month: 'short', year: 'numeric' };
+            return new Date(dateStr).toLocaleDateString('id-ID', options);
+        };
+
+        let currentPage = 'dashboard';
+
+        function switchPage(page) {
+            currentPage = page;
+            document.querySelectorAll('.page-section').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`page-${page}`).classList.remove('hidden');
+            
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            document.getElementById(`nav-${page}`).classList.add('active');
+
+            document.getElementById('page-title').innerText = page === 'dashboard' ? 'Dashboard Analitik' : 'Master Rekap Data';
+            applyGlobalFilter();
         }
 
-        // --- TAMBAH RECORD MODAL DENGAN PENGECIL GAMBAR OTOMATIS (Mencegah Crash Drive) ---
-        function AddRecordModal({ onClose, onAddSuccess, products }) {
-            const [isSubmitting, setIsSubmitting] = useState(false);
-            const [productList, setProductList] = useState(products.length ? products : ['Pena Parker', 'Pena Montblanc', 'Pena Lamy']);
-            const [newProduct, setNewProduct] = useState('');
+        function applyGlobalFilter() {
+            if(currentPage === 'dashboard') renderDashboard();
+            if(currentPage === 'rekap') renderTable();
+        }
 
-            const getInitialState = () => ({
-                tanggal: new Date().toISOString().split('T')[0],
-                nama: '', alamat: '', produk: productList[0] || '', pembayaran: 'Transfer',
-                nominal: '', kodeTransaksi: `TRX-${Date.now().toString().slice(-6)}`,
-                persentaseFee: '', nominalFee: '', fileTransfer: null, filePerawatan: null
+        function getFilteredData() {
+            const m = document.getElementById('global-month').value;
+            const y = document.getElementById('global-year').value;
+            
+            return dbData.filter(d => {
+                const date = new Date(d.tanggal);
+                const dMonth = String(date.getMonth() + 1).padStart(2, '0');
+                const dYear = String(date.getFullYear());
+                
+                let matchM = m === 'ALL' || dMonth === m;
+                let matchY = y === 'ALL' || dYear === y;
+                return matchM && matchY;
+            });
+        }
+
+        // --- DASHBOARD LOGIC ---
+        function renderDashboard() {
+            const data = getFilteredData();
+
+            let makro = 0, transfer = 0, tunai = 0;
+            data.forEach(d => {
+                makro += Number(d.nominal);
+                if(d.pembayaran === 'Transfer') transfer += Number(d.nominal);
+                if(d.pembayaran === 'Tunai') tunai += Number(d.nominal);
             });
 
-            const [formData, setFormData] = useState(getInitialState());
-            const [previewTf, setPreviewTf] = useState(null);
-            const [previewPr, setPreviewPr] = useState(null);
+            document.getElementById('card-makro').innerText = formatRp(makro);
+            document.getElementById('card-transfer').innerText = formatRp(transfer);
+            document.getElementById('card-tunai').innerText = formatRp(tunai);
+            
+            const pctTransfer = makro > 0 ? Math.round((transfer / makro) * 100) : 0;
+            const pctTunai = makro > 0 ? Math.round((tunai / makro) * 100) : 0;
+            
+            document.getElementById('card-transfer-pct').innerHTML = `<span class="font-bold text-slate-600">${pctTransfer}%</span> dari total`;
+            document.getElementById('card-tunai-pct').innerHTML = `<span class="font-bold text-slate-600">${pctTunai}%</span> dari total`;
 
-            const handleCalc = (nom, fee) => {
-                setFormData(prev => ({ 
-                    ...prev, 
-                    nominal: nom, 
-                    persentaseFee: fee, 
-                    nominalFee: (nom && fee) ? (parseFloat(nom) * parseFloat(fee)) / 100 : '' 
-                }));
-            };
-
-            const compressFile = (file) => {
-                return new Promise((resolve, reject) => {
-                    if (!file) return resolve(null);
-                    const reader = new FileReader();
-                    reader.readAsDataURL(file);
-                    reader.onload = (e) => {
-                        const img = new Image();
-                        img.src = e.target.result;
-                        img.onload = () => {
-                            const canvas = document.createElement('canvas');
-                            const max_size = 800; // resolusi optimal untuk hemat kuota dan tidak crash di GAS
-                            let width = img.width;
-                            let height = img.height;
-
-                            if (width > height) {
-                                if (width > max_size) { height *= max_size / width; width = max_size; }
-                            } else {
-                                if (height > max_size) { width *= max_size / height; height = max_size; }
-                            }
-                            canvas.width = width;
-                            canvas.height = height;
-                            const ctx = canvas.getContext('2d');
-                            ctx.drawImage(img, 0, 0, width, height);
-                            resolve(canvas.toDataURL('image/jpeg', 0.6));
-                        };
-                    };
-                    reader.onerror = (err) => reject(err);
-                });
-            };
-
-            const handleSubmit = async (e) => {
-                e.preventDefault();
-                setIsSubmitting(true);
-                try {
-                    const base64Transfer = await compressFile(formData.fileTransfer);
-                    const base64Perawatan = await compressFile(formData.filePerawatan);
-
-                    const payload = {
-                        ...formData,
-                        buktiTransferBase64: base64Transfer,
-                        buktiPerawatanBase64: base64Perawatan
-                    };
-
-                    const response = await fetch(GAS_URL, {
-                        method: 'POST',
-                        body: JSON.stringify(payload)
-                    });
-
-                    const res = await response.json();
-                    if (res.status === 'success') {
-                        alert("Data Sukses Tersimpan ke Drive dan Sheet!");
-                        onAddSuccess();
-                        setFormData(getInitialState());
-                        setPreviewTf(null);
-                        setPreviewPr(null);
-                    } else {
-                        alert("Gagal: " + res.message);
-                    }
-                } catch (err) {
-                    alert("Gagal melakukan upload. Coba bersihkan file atau gunakan gambar berukuran kecil.");
-                } finally {
-                    setIsSubmitting(false);
-                }
-            };
-
-            return (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-                    <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[95vh] flex flex-col shadow-2xl">
-                        <div className="px-6 py-4 border-b bg-blue-600 text-white rounded-t-2xl flex justify-between items-center">
-                            <h2 className="font-bold flex items-center gap-2">Tambah Record Baru</h2>
-                            <button onClick={onClose} disabled={isSubmitting} className="hover:bg-blue-700 p-1 rounded-full"><i data-lucide="x"></i></button>
-                        </div>
-                        <div className="p-6 overflow-y-auto flex-1 custom-scrollbar">
-                            <form id="addForm" onSubmit={handleSubmit} className="space-y-4">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="space-y-3">
-                                        <div><label className="text-xs font-bold block text-slate-600 mb-1">Tanggal</label><input type="date" required value={formData.tanggal} onChange={e => setFormData({...formData, tanggal: e.target.value})} className="w-full border p-2 rounded" /></div>
-                                        <div><label className="text-xs font-bold block text-slate-600 mb-1">Nama</label><input type="text" required value={formData.nama} onChange={e => setFormData({...formData, nama: e.target.value})} className="w-full border p-2 rounded" /></div>
-                                        <div><label className="text-xs font-bold block text-slate-600 mb-1">Alamat</label><textarea required value={formData.alamat} onChange={e => setFormData({...formData, alamat: e.target.value})} className="w-full border p-2 rounded" rows="2" /></div>
-                                        <div>
-                                            <label className="text-xs font-bold block text-slate-600 mb-1">Produk</label>
-                                            <select value={formData.produk} onChange={e => setFormData({...formData, produk: e.target.value})} className="w-full border p-2 rounded mb-2">
-                                                {productList.map(p => <option key={p} value={p}>{p}</option>)}
-                                            </select>
-                                            <div className="flex gap-2">
-                                                <input type="text" value={newProduct} onChange={e => setNewProduct(e.target.value)} placeholder="Tulis produk baru..." className="border p-1.5 text-xs rounded flex-1" />
-                                                <button type="button" onClick={() => {
-                                                    if (newProduct && !productList.includes(newProduct)) {
-                                                        setProductList([...productList, newProduct]);
-                                                        setFormData({...formData, produk: newProduct});
-                                                        setNewProduct('');
-                                                    }
-                                                }} className="bg-slate-200 text-xs px-3 rounded font-bold">Tambah</button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="space-y-3">
-                                        <div>
-                                            <label className="text-xs font-bold block text-slate-600 mb-1">Pembayaran</label>
-                                            <div className="flex gap-4 p-2 bg-slate-50 border rounded">
-                                                <label className="flex items-center gap-1 cursor-pointer"><input type="radio" name="pay" checked={formData.pembayaran === 'Transfer'} onChange={() => setFormData({...formData, pembayaran: 'Transfer'})} /> Transfer</label>
-                                                <label className="flex items-center gap-1 cursor-pointer"><input type="radio" name="pay" checked={formData.pembayaran === 'Tunai'} onChange={() => setFormData({...formData, pembayaran: 'Tunai'})} /> Tunai</label>
-                                            </div>
-                                        </div>
-                                        <div><label className="text-xs font-bold block text-slate-600 mb-1">Nominal (IDR)</label><input type="number" required value={formData.nominal} onChange={e => handleCalc(e.target.value, formData.persentaseFee)} className="w-full border p-2 rounded font-mono" /></div>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <div><label className="text-xs font-bold block text-slate-600 mb-1">Fee (%)</label><input type="number" required value={formData.persentaseFee} onChange={e => handleCalc(formData.nominal, e.target.value)} className="w-full border p-2 rounded font-mono" /></div>
-                                            <div><label className="text-xs font-bold block text-slate-600 mb-1">Nominal Fee</label><input type="text" readOnly value={formData.nominalFee} className="w-full border p-2 rounded font-mono bg-slate-100" /></div>
-                                        </div>
-                                        <div><label className="text-xs font-bold block text-slate-600 mb-1">Kode Transaksi</label><input type="text" value={formData.kodeTransaksi} readOnly className="w-full border p-2 rounded font-mono text-xs bg-slate-100" /></div>
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-4">
-                                    <div>
-                                        <label className="text-xs font-bold block text-slate-600 mb-1">Foto Bukti Transfer</label>
-                                        <input type="file" accept="image/*" onChange={e => {
-                                            const file = e.target.files[0];
-                                            if (file) {
-                                                setPreviewTf(URL.createObjectURL(file));
-                                                setFormData({...formData, fileTransfer: file});
-                                            }
-                                        }} className="text-xs w-full" />
-                                        {previewTf && <img src={previewTf} className="mt-2 h-20 rounded border object-cover" />}
-                                    </div>
-                                    <div>
-                                        <label className="text-xs font-bold block text-slate-600 mb-1">Foto Bukti Perawatan (Wajib)</label>
-                                        <input type="file" required accept="image/*" onChange={e => {
-                                            const file = e.target.files[0];
-                                            if (file) {
-                                                setPreviewPr(URL.createObjectURL(file));
-                                                setFormData({...formData, filePerawatan: file});
-                                            }
-                                        }} className="text-xs w-full" />
-                                        {previewPr && <img src={previewPr} className="mt-2 h-20 rounded border object-cover" />}
-                                    </div>
-                                </div>
-                            </form>
-                        </div>
-                        <div className="px-6 py-4 border-t bg-slate-50 flex justify-end gap-2">
-                            <button type="button" onClick={onClose} disabled={isSubmitting} className="px-4 py-2 bg-slate-200 rounded-lg text-sm font-bold">Batal / Tutup</button>
-                            <button type="submit" form="addForm" disabled={isSubmitting} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold">
-                                {isSubmitting ? "Sedang Mengirim..." : "Simpan Data"}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            );
+            renderHeatmap(); 
+            renderProdukChart(data);
+            renderTrendChart(data);
         }
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        function renderHeatmap() {
+            const container = document.getElementById('heatmap-container');
+            container.innerHTML = '';
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des'];
+            
+            let monthTotals = Array(12).fill(0);
+            const data = getFilteredData(); 
+            
+            data.forEach(d => {
+                const mIdx = new Date(d.tanggal).getMonth();
+                monthTotals[mIdx] += Number(d.nominal);
+            });
+
+            const maxVal = Math.max(...monthTotals, 1);
+
+            months.forEach((m, idx) => {
+                const val = monthTotals[idx];
+                const intensity = val / maxVal;
+                
+                let bgClass = "bg-slate-50 border-slate-100 text-slate-400"; 
+                let textClass = "text-slate-500";
+                
+                if (val > 0) {
+                    if (intensity < 0.25) { bgClass = "bg-indigo-100 border-indigo-200 text-indigo-700"; textClass = "text-indigo-800"; }
+                    else if (intensity < 0.5) { bgClass = "bg-indigo-300 border-indigo-400 text-indigo-900"; textClass = "text-indigo-900"; }
+                    else if (intensity < 0.75) { bgClass = "bg-indigo-500 border-indigo-600 text-white"; textClass = "text-indigo-50"; }
+                    else { bgClass = "bg-primary border-indigo-700 text-white shadow-md shadow-indigo-200"; textClass = "text-indigo-100"; }
+                }
+
+                container.innerHTML += `
+                    <div class="heatmap-cell flex flex-col justify-center items-center h-20 sm:h-24 rounded-xl border ${bgClass} cursor-default">
+                        <span class="font-bold text-xs sm:text-sm uppercase tracking-wider mb-0.5 sm:mb-1">${m}</span>
+                        <span class="text-[10px] sm:text-xs font-medium ${textClass} truncate w-full text-center px-1" title="${formatRp(val)}">${val > 0 ? formatRp(val) : '-'}</span>
+                    </div>
+                `;
+            });
+        }
+
+        function renderProdukChart(data) {
+            const ctx = document.getElementById('produkChart').getContext('2d');
+            if(chartProduk) chartProduk.destroy();
+
+            const pCount = {};
+            data.forEach(d => {
+                pCount[d.produk] = (pCount[d.produk] || 0) + Number(d.nominal);
+            });
+
+            chartProduk = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(pCount),
+                    datasets: [{
+                        label: 'Penjualan (Rp)',
+                        data: Object.values(pCount),
+                        backgroundColor: '#0ea5e9',
+                        borderRadius: 6,
+                        barThickness: window.innerWidth < 640 ? 16 : 24
+                    }]
+                },
+                options: { 
+                    indexAxis: 'y',
+                    responsive: true, 
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { border: { display: false }, grid: { display: true }, ticks: { font: {size: 10} } },
+                        y: { border: { display: false }, grid: { display: false }, ticks: { font: {size: 11} } }
+                    }
+                }
+            });
+        }
+
+        function renderTrendChart(data) {
+            const ctx = document.getElementById('trendChart').getContext('2d');
+            if(chartTrend) chartTrend.destroy();
+
+            const grouped = {};
+            data.forEach(d => {
+                if(!grouped[d.tanggal]) grouped[d.tanggal] = { makro: 0, transfer: 0, tunai: 0 };
+                grouped[d.tanggal].makro += Number(d.nominal);
+                if(d.pembayaran === 'Transfer') grouped[d.tanggal].transfer += Number(d.nominal);
+                if(d.pembayaran === 'Tunai') grouped[d.tanggal].tunai += Number(d.nominal);
+            });
+
+            const sortedDates = Object.keys(grouped).sort();
+            const displayDates = sortedDates.map(date => formatDate(date));
+            const pointRad = window.innerWidth < 640 ? 2 : 4;
+            const lineTens = window.innerWidth < 640 ? 2 : 3;
+
+            chartTrend = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: displayDates,
+                    datasets: [
+                        { label: 'Makro', data: sortedDates.map(k => grouped[k].makro), borderColor: '#4f46e5', backgroundColor: 'rgba(79, 70, 229, 0.1)', borderWidth: lineTens, tension: 0.4, fill: true, pointBackgroundColor: '#4f46e5', pointRadius: pointRad },
+                        { label: 'Transfer', data: sortedDates.map(k => grouped[k].transfer), borderColor: '#10b981', borderWidth: 2, tension: 0.4, pointRadius: pointRad-1 },
+                        { label: 'Tunai', data: sortedDates.map(k => grouped[k].tunai), borderColor: '#f59e0b', borderWidth: 2, tension: 0.4, pointRadius: pointRad-1 }
+                    ]
+                },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { border: { display: false }, grid: { display: false }, ticks: { font: {size: 10} } },
+                        y: { border: { display: false }, borderDash: [5, 5], ticks: { font: {size: 10} } }
+                    },
+                    interaction: { mode: 'index', intersect: false }
+                }
+            });
+        }
+
+        // --- MASTER REKAP LOGIC ---
+        function renderTable() {
+            const data = getFilteredData();
+            const tbody = document.getElementById('table-body');
+            const emptyState = document.getElementById('table-empty');
+            
+            tbody.innerHTML = '';
+
+            if (data.length === 0) {
+                emptyState.classList.remove('hidden');
+            } else {
+                emptyState.classList.add('hidden');
+                
+                data.forEach(d => {
+                    const badgeClass = d.pembayaran === 'Transfer' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700';
+                    const tr = document.createElement('tr');
+                    tr.className = "hover:bg-slate-50 cursor-pointer transition-colors group";
+                    tr.onclick = () => openDetailModal(d);
+                    
+                    tr.innerHTML = `
+                        <td class="px-4 md:px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm font-semibold text-slate-800">${formatDate(d.tanggal)}</div>
+                            <div class="text-xs font-mono text-slate-400 mt-0.5">${d.kode_transaksi}</div>
+                        </td>
+                        <td class="px-4 md:px-6 py-4">
+                            <div class="text-sm font-bold text-slate-800 group-hover:text-primary transition-colors">${d.nama}</div>
+                            <div class="text-xs text-slate-500 truncate max-w-[150px] md:max-w-[200px] mt-0.5" title="${d.alamat}">${d.alamat}</div>
+                        </td>
+                        <td class="px-4 md:px-6 py-4 whitespace-nowrap">
+                            <span class="inline-flex items-center px-2 py-1 rounded text-[10px] md:text-xs font-medium bg-slate-100 text-slate-700">
+                                ${d.produk}
+                            </span>
+                        </td>
+                        <td class="px-4 md:px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm font-bold text-slate-800">${formatRp(d.nominal)}</div>
+                            <span class="mt-1 px-2 py-0.5 inline-flex text-[10px] leading-4 font-bold rounded ${badgeClass}">${d.pembayaran}</span>
+                        </td>
+                        <td class="px-4 md:px-6 py-4 whitespace-nowrap text-right">
+                            <div class="text-sm font-bold text-slate-700">${formatRp(d.nominal_fee)}</div>
+                            <div class="text-xs text-slate-400 mt-0.5 font-medium">Rate: ${d.persentase_fee}%</div>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+        }
+
+        function openDetailModal(d) {
+            const modal = document.getElementById('modal-detail');
+            const content = document.getElementById('detail-content');
+            const badgeClass = d.pembayaran === 'Transfer' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700';
+
+            content.innerHTML = `
+                <div class="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                    <p class="text-slate-400 text-[10px] md:text-xs font-semibold mb-1 uppercase">Tanggal Transaksi</p>
+                    <p class="font-bold text-slate-800 text-sm md:text-base">${formatDate(d.tanggal)}</p>
+                </div>
+                <div class="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                    <p class="text-slate-400 text-[10px] md:text-xs font-semibold mb-1 uppercase">Kode TRX</p>
+                    <p class="font-bold font-mono text-primary text-sm md:text-base">${d.kode_transaksi}</p>
+                </div>
+                
+                <div class="md:col-span-2 bg-slate-50 p-3 md:p-4 rounded-lg border border-slate-100">
+                    <p class="text-slate-400 text-[10px] md:text-xs font-semibold mb-1 uppercase">Informasi Pelanggan</p>
+                    <p class="font-bold text-slate-800 text-base md:text-lg">${d.nama}</p>
+                    <p class="text-slate-600 mt-1 flex items-start gap-2 text-xs md:text-sm"><i class="fa-solid fa-location-dot mt-0.5 md:mt-1 text-slate-400"></i> ${d.alamat}</p>
+                </div>
+                
+                <div class="border-t border-slate-100 md:col-span-2 my-1 md:my-2"></div>
+
+                <div>
+                    <p class="text-slate-400 text-[10px] md:text-xs font-semibold mb-1 uppercase">Pembelian Produk</p>
+                    <p class="font-bold text-slate-800 text-sm md:text-base">${d.produk}</p>
+                </div>
+                <div>
+                    <p class="text-slate-400 text-[10px] md:text-xs font-semibold mb-1 uppercase">Pembayaran</p>
+                    <div class="flex items-center gap-2 text-sm md:text-base">
+                        <p class="font-bold text-slate-800">${formatRp(d.nominal)}</p>
+                        <span class="px-2 py-0.5 text-[10px] font-bold rounded ${badgeClass}">${d.pembayaran}</span>
+                    </div>
+                </div>
+                <div class="md:col-span-2">
+                    <p class="text-slate-400 text-[10px] md:text-xs font-semibold mb-1 uppercase">Kalkulasi Fee Rekap</p>
+                    <p class="font-bold text-slate-800 text-sm md:text-base">${formatRp(d.nominal_fee)} <span class="text-xs md:text-sm font-normal text-slate-500">(Rate: ${d.persentase_fee}%)</span></p>
+                </div>
+
+                <div class="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2 md:mt-4">
+                    <div>
+                        <p class="text-slate-400 text-[10px] md:text-xs font-semibold mb-2 uppercase"><i class="fa-solid fa-paperclip mr-1"></i> Bukti Transfer</p>
+                        ${d.bukti_transfer ? `<a href="${d.bukti_transfer}" target="_blank"><img src="${d.bukti_transfer}" class="w-full object-cover rounded-lg border border-slate-200 shadow-sm hover:opacity-90 transition-opacity h-32 md:h-40"></a>` : `<div class="bg-slate-100 h-32 md:h-40 flex flex-col items-center justify-center text-slate-400 rounded-lg border border-dashed border-slate-300"><i class="fa-regular fa-image text-xl md:text-2xl mb-2"></i><span class="text-xs">Tidak ada lampiran</span></div>`}
+                    </div>
+                    <div>
+                        <p class="text-slate-400 text-[10px] md:text-xs font-semibold mb-2 uppercase"><i class="fa-solid fa-paperclip mr-1"></i> Bukti Perawatan</p>
+                        ${d.bukti_perawatan ? `<a href="${d.bukti_perawatan}" target="_blank"><img src="${d.bukti_perawatan}" class="w-full object-cover rounded-lg border border-slate-200 shadow-sm hover:opacity-90 transition-opacity h-32 md:h-40"></a>` : `<div class="bg-slate-100 h-32 md:h-40 flex flex-col items-center justify-center text-slate-400 rounded-lg border border-dashed border-slate-300"><i class="fa-regular fa-image text-xl md:text-2xl mb-2"></i><span class="text-xs">Tidak ada lampiran</span></div>`}
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('btn-edit-record').onclick = () => {
+                closeModal('modal-detail');
+                openFormModal(d);
+            };
+            
+            modal.classList.remove('hidden');
+        }
+
+        // --- FORM LOGIC ---
+        function openFormModal(editData = null) {
+            document.getElementById('record-form').reset();
+            updateProdukDropdown();
+            
+            if(editData) {
+                document.getElementById('form-title').innerHTML = '<i class="fa-solid fa-pen-to-square text-warning"></i> Edit Data Rekap';
+                document.getElementById('form-id').value = editData.id;
+                document.getElementById('f-tanggal').value = editData.tanggal;
+                document.getElementById('f-kode').value = editData.kode_transaksi;
+                document.getElementById('f-nama').value = editData.nama;
+                document.getElementById('f-alamat').value = editData.alamat;
+                document.getElementById('f-produk').value = editData.produk;
+                document.querySelector(`input[name="f-pembayaran"][value="${editData.pembayaran}"]`).checked = true;
+                document.getElementById('f-nominal').value = editData.nominal;
+                document.getElementById('f-persen-fee').value = editData.persentase_fee;
+                calculateFee();
+            } else {
+                document.getElementById('form-title').innerHTML = '<i class="fa-solid fa-file-circle-plus text-primary"></i> Tambah Record Baru';
+                document.getElementById('form-id').value = "";
+                document.getElementById('f-nominal-fee').value = "";
+            }
+            
+            document.getElementById('modal-form').classList.remove('hidden');
+        }
+
+        function calculateFee() {
+            const nom = Number(document.getElementById('f-nominal').value) || 0;
+            const persen = Number(document.getElementById('f-persen-fee').value) || 0;
+            document.getElementById('f-nominal-fee').value = (nom * persen) / 100;
+        }
+
+        // Modal Produk Logic
+        function openAddProdukModal() {
+            document.getElementById('input-new-produk').value = ""; 
+            document.getElementById('modal-tambah-produk').classList.remove('hidden');
+            setTimeout(() => { document.getElementById('input-new-produk').focus(); }, 100);
+        }
+
+        function saveNewProduk() {
+            const inputVal = document.getElementById('input-new-produk').value;
+            if(inputVal && inputVal.trim() !== "") {
+                const newProduct = inputVal.trim();
+                if(!produkList.includes(newProduct)) { produkList.push(newProduct); }
+                updateProdukDropdown();
+                document.getElementById('f-produk').value = newProduct; 
+                closeModal('modal-tambah-produk');
+            } else {
+                const inputEl = document.getElementById('input-new-produk');
+                inputEl.classList.add('border-red-500', 'ring-red-200');
+                setTimeout(() => inputEl.classList.remove('border-red-500', 'ring-red-200'), 1500);
+            }
+        }
+
+        function updateProdukDropdown() {
+            const sel = document.getElementById('f-produk');
+            sel.innerHTML = produkList.map(p => `<option value="${p}">${p}</option>`).join('');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.add('hidden');
+        }
+
+        // --- SUBMIT DENGAN INTEGRASI GOOGLE SHEETS ---
+        async function handleFormSubmit(e) {
+            e.preventDefault();
+            const btn = document.getElementById('btn-save');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Menyimpan...';
+            btn.disabled = true;
+
+            const isEdit = document.getElementById('form-id').value !== "";
+            
+            // 1. Buat Objek Data Baru (untuk update lokal UI agar langsung muncul)
+            const newData = {
+                id: isEdit ? document.getElementById('form-id').value : Date.now().toString(),
+                tanggal: document.getElementById('f-tanggal').value,
+                nama: document.getElementById('f-nama').value,
+                alamat: document.getElementById('f-alamat').value,
+                produk: document.getElementById('f-produk').value,
+                pembayaran: document.querySelector('input[name="f-pembayaran"]:checked').value,
+                nominal: document.getElementById('f-nominal').value,
+                kode_transaksi: document.getElementById('f-kode').value,
+                persentase_fee: document.getElementById('f-persen-fee').value,
+                nominal_fee: document.getElementById('f-nominal-fee').value,
+                bukti_transfer: document.getElementById('f-bukti-transfer').files.length > 0 ? "https://images.unsplash.com/photo-1563013544-824ae1b704d3?w=300" : (isEdit ? dbData.find(d=>d.id===document.getElementById('form-id').value).bukti_transfer : ""),
+                bukti_perawatan: document.getElementById('f-bukti-perawatan').files.length > 0 ? "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=300" : (isEdit ? dbData.find(d=>d.id===document.getElementById('form-id').value).bukti_perawatan : "")
+            };
+
+            // 2. Siapkan data untuk dikirim ke Google Sheets
+            const form = document.getElementById('record-form');
+            const formData = new FormData(form);
+            // Tambahkan data custom tambahan jika perlu
+            formData.append('pembayaran', newData.pembayaran);
+
+            try {
+                // 3. Proses Pengiriman Background ke Google Sheets
+                await fetch(GAS_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    body: formData
+                });
+
+                // Jika fetch berjalan tanpa henti (meski no-cors), lanjut update UI Lokal:
+                if(isEdit) {
+                    const idx = dbData.findIndex(d => d.id === newData.id);
+                    dbData[idx] = { ...dbData[idx], ...newData };
+                    closeModal('modal-form');
+                } else {
+                    dbData.unshift(newData); 
+                    document.getElementById('record-form').reset(); 
+                    document.getElementById('f-nominal-fee').value = "";
+                }
+                
+                applyGlobalFilter();
+                alert(isEdit ? "Perubahan data berhasil disimpan." : "Data baru berhasil ditambahkan.");
+            } catch (error) {
+                // Fallback (Tetap update UI Lokal meskipun gagal kirim ke gsheets, agar user bisa lihat inputannya)
+                alert("Gagal mengirim ke Google Sheets, harap periksa URL Web App. Data disimpan di tampilan sementara.");
+                if(isEdit) {
+                    const idx = dbData.findIndex(d => d.id === newData.id);
+                    dbData[idx] = { ...dbData[idx], ...newData };
+                    closeModal('modal-form');
+                } else {
+                    dbData.unshift(newData); 
+                    document.getElementById('record-form').reset(); 
+                    document.getElementById('f-nominal-fee').value = "";
+                }
+                applyGlobalFilter();
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        // --- EXPORT & PRINT LOGIC ---
+        function exportDashboardPDF() {
+            const element = document.getElementById('dashboard-content');
+            const opt = {
+                margin:       0.5,
+                filename:     'Dashboard_Analitik_Pena.pdf',
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#f8fafc', windowWidth: 1200 },
+                jsPDF:        { unit: 'in', format: 'a4', orientation: 'landscape' }
+            };
+            html2pdf().set(opt).from(element).save();
+        }
+
+        function exportCSV() {
+            const data = getFilteredData();
+            const headers = ['Tanggal', 'Kode Transaksi', 'Nama Pelanggan', 'Alamat', 'Produk', 'Metode Pembayaran', 'Nominal Transaksi', 'Persentase Fee (%)', 'Nominal Fee'];
+            const rows = data.map(d => [
+                d.tanggal, d.kode_transaksi, `"${d.nama}"`, `"${d.alamat}"`, d.produk, d.pembayaran, d.nominal, d.persentase_fee, d.nominal_fee
+            ]);
+            
+            let csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.map(e => e.join(",")).join("\n");
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `Rekap_Pena_${new Date().getTime()}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        }
+
+        function printArea(type) {
+            const data = getFilteredData();
+            const printCont = document.getElementById('print-content');
+            const printTitle = document.getElementById('print-title');
+            
+            const m = document.getElementById('global-month').options[document.getElementById('global-month').selectedIndex].text;
+            const y = document.getElementById('global-year').options[document.getElementById('global-year').selectedIndex].text;
+            document.getElementById('print-subtitle').innerText = `Filter Periode: Bulan ${m}, Tahun ${y}`;
+            document.getElementById('print-date').innerText = new Date().toLocaleString('id-ID');
+            
+            if(type === 'table') {
+                printTitle.innerText = "Laporan Master Rekap Data";
+                const tableHtml = document.querySelector('#page-rekap table').outerHTML;
+                printCont.innerHTML = tableHtml;
+            } 
+            else if (type === 'perawatan' || type === 'transfer') {
+                printTitle.innerText = type === 'perawatan' ? "Cetak Lampiran Bukti Perawatan" : "Cetak Lampiran Bukti Transfer";
+                
+                let cardsHtml = '<div class="print-card-grid">';
+                let hasImages = false;
+                
+                data.forEach(d => {
+                    const imgUrl = type === 'perawatan' ? d.bukti_perawatan : d.bukti_transfer;
+                    if(imgUrl) {
+                        hasImages = true;
+                        cardsHtml += `
+                            <div class="print-card">
+                                <img src="${imgUrl}" class="print-img">
+                                <div class="mt-3 text-center">
+                                    <div class="font-bold text-sm">${d.nama}</div>
+                                    <div class="text-xs text-gray-500 mt-1">${d.alamat}</div>
+                                    <div class="inline-block mt-2 px-2 py-1 bg-gray-100 border border-gray-300 rounded text-xs font-mono font-bold">${d.kode_transaksi}</div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                });
+                cardsHtml += '</div>';
+                
+                if(!hasImages) {
+                    alert("Tidak ada gambar bukti pada data di filter saat ini.");
+                    return;
+                }
+                printCont.innerHTML = cardsHtml;
+            }
+
+            setTimeout(() => { window.print(); }, 200);
+        }
+
+        // Initialization
+        window.addEventListener('resize', () => {
+            if(chartTrend) chartTrend.resize();
+            if(chartProduk) chartProduk.resize();
+        });
+        
+        switchPage('dashboard');
+
     </script>
 </body>
 </html>
